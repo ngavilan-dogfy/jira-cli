@@ -1,0 +1,32 @@
+# Binary
+bin/
+jira-cli
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+*credential*
+*secret*
+*.p12
+
+# Build / deps
+target/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+*.log
