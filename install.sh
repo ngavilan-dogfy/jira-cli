@@ -9,6 +9,7 @@
 #   JIRA_INSTALL_DIR=~/bin   where to put jira (default: ~/.local/bin)
 #   JIRA_VERSION=v0.2.0      a specific release (default: the latest)
 #   JIRA_NO_SETUP=1          don't offer to run 'jira setup' at the end
+#   JIRA_NO_SKILL=1          don't offer the Claude Code skill
 #   JIRA_NO_MODIFY_PATH=1    never touch your shell's config file
 #
 # Nothing here needs sudo. Run it again any time to update.
@@ -269,8 +270,19 @@ main() {
 	fi
 
 	printf '\n'
-	if [ -d "$HOME/.claude" ] && [ ! -f "$HOME/.claude/skills/jira/SKILL.md" ]; then
-		info "Using Claude Code? ${B}jira skill install${R} teaches it this CLI (/jira)."
+	# Claude Code users get the skill offered: it teaches Claude this CLI.
+	if [ ! -f "$HOME/.claude/skills/jira/SKILL.md" ] && { [ -d "$HOME/.claude" ] || command -v claude >/dev/null 2>&1; }; then
+		if [ -z "${JIRA_NO_SKILL:-}" ] && can_ask && ask "You use Claude Code: teach it this CLI? (installs the /jira skill)"; then
+			if "$INSTALL_DIR/jira" skill install --quiet >/dev/null 2>&1; then
+				ok "Claude Code skill installed: ask Claude to find, create or work on tickets"
+			else
+				warn "Couldn't install the Claude Code skill"
+				hint "Run: jira skill install"
+			fi
+			printf '\n'
+		else
+			info "Using Claude Code? ${B}jira skill install${R} teaches it this CLI (/jira)."
+		fi
 	fi
 	if [ -n "$previous" ] && configured; then
 		say "${OK}Done.${R} Your settings are untouched. ${DIM}What's new: $RELEASES${R}"

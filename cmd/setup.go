@@ -44,7 +44,11 @@ defaults, so you only change what you want.
   Step 1  Your Jira site      paste any Jira link, or just the site name
   Step 2  Sign in             API token (recommended) or browser login (OAuth)
   Step 3  Default project     where 'jira ls' and 'jira ui' start
-  Step 4  Extras (optional)   GitHub CLI, Claude Code, your repos folder
+  Step 4  Extras (optional)   your repos folder, GitHub sign-in, the Claude Code skill
+
+With an API token you don't have to paste: click Copy on the new token and
+setup takes it from your clipboard (and clears it after saving). Your email
+comes from git: the work one, when you keep several.
 
 Settings are saved in ~/.config/jira-cli/ (only readable by you).
 
@@ -778,6 +782,19 @@ func (w *wizard) stepExtras() error {
 		printCheck(c)
 	}
 	fmt.Println()
+	if err := w.askRepos(); err != nil {
+		return err
+	}
+	if err := offerGitHub(); err != nil {
+		return err
+	}
+	if _, err := lookTool("claude"); err == nil {
+		return offerSkill()
+	}
+	return nil
+}
+
+func (w *wizard) askRepos() error {
 	root, n := tui.ReposRoot(w.profile)
 	if root != "" {
 		use := true
@@ -788,7 +805,11 @@ func (w *wizard) stepExtras() error {
 			return err
 		}
 		if use {
-			return tui.SetReposRoot(w.profile, root)
+			if err := tui.SetReposRoot(w.profile, root); err != nil {
+				return err
+			}
+			sayOK(fmt.Sprintf("Repos folder: %s (%d repos)", tildePath(root), n))
+			return nil
 		}
 	}
 	dir := ""
@@ -819,6 +840,81 @@ func (w *wizard) stepExtras() error {
 	return nil
 }
 
+// runGHLogin runs 'gh auth login' on this terminal; swappable in tests.
+var runGHLogin = func() error {
+	c := exec.Command("gh", "auth", "login")
+	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return c.Run()
+}
+
+// offerGitHub signs the GitHub CLI in when it's installed but signed out:
+// that's what puts pull requests on tickets.
+func offerGitHub() error {
+	if _, err := lookTool("gh"); err != nil {
+		return nil
+	}
+	if _, err := probeTool(10*time.Second, "gh", "auth", "status"); err == nil {
+		return nil
+	}
+	fmt.Println()
+	yes := true
+	if err := ask(huh.NewConfirm().
+		Title("Sign in to GitHub now? (gh auth login)").
+		Description("So tickets show their pull requests. GitHub asks a few questions and\nopens your browser; pick HTTPS and 'Login with a web browser'.").
+		Affirmative("Yes").Negative("Later").Value(&yes)); err != nil || !yes {
+		if err == nil {
+			sayInfo("Later: " + cmdHint("gh auth login"))
+		}
+		return err
+	}
+	fmt.Println()
+	if err := runGHLogin(); err != nil {
+		sayWarn("GitHub sign-in didn't finish", "Run it again any time: gh auth login")
+		return nil
+	}
+	if status, err := probeTool(10*time.Second, "gh", "auth", "status"); err == nil {
+		who := ""
+		if m := reGHAccount.FindStringSubmatch(status); m != nil {
+			who = " as " + m[1]
+		}
+		sayOK("GitHub CLI signed in" + who + " — pull requests show on tickets")
+	}
+	return nil
+}
+
+// offerSkill installs (or refreshes) the /jira skill for Claude Code, if
+// the user wants it.
+func offerSkill() error {
+	dest, err := skillPath()
+	if err != nil {
+		return nil
+	}
+	current, _ := os.ReadFile(dest)
+	if string(current) == string(skillMD) {
+		sayOK("Claude Code knows this CLI " + wzMuted.Render("(/jira skill installed)"))
+		return nil
+	}
+	yes := true
+	title := "Teach Claude Code to use this CLI? (/jira skill)"
+	if len(current) > 0 {
+		title = "Refresh the /jira skill for Claude Code to this version?"
+	}
+	fmt.Println()
+	if err := ask(huh.NewConfirm().Title(title).
+		Description("Then ask Claude to find, create or move tickets, or to work on one,\nand it uses this CLI — asking before it changes anything.").
+		Affirmative("Yes").Negative("No").Value(&yes)); err != nil || !yes {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(dest, skillMD, 0o644); err != nil {
+		return err
+	}
+	sayOK("Claude Code skill installed " + wzMuted.Render(tildePath(dest)))
+	return nil
+}
+
 func (w *wizard) done() error {
 	fmt.Println()
 	fmt.Println("  " + wzOK.Render("●") + " " + wzBold.Render("All set!"))
@@ -838,12 +934,16 @@ func (w *wizard) done() error {
 		return nil
 	}
 	fmt.Println("  Try these:")
-	for _, c := range [][2]string{
+	tries := [][2]string{
 		{"jira ls", "your open issues"},
 		{"jira ui", "the interactive view (press ? inside for help)"},
 		{"jira doctor", "check that everything works"},
 		{"jira --help", "every command"},
-	} {
+	}
+	if skillInstalled() {
+		tries = append(tries, [2]string{"/jira", "in Claude Code: \"what's on my plate this sprint?\""})
+	}
+	for _, c := range tries {
 		fmt.Printf("    %s %s\n", cmdHint(fmt.Sprintf("%-12s", c[0])), wzMuted.Render(c[1]))
 	}
 	fmt.Println()

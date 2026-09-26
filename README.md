@@ -24,22 +24,22 @@ jira ui
 
 No Jira at hand? `jira ui --demo` opens a made-up team's project, branches and agents included, so you can look around first. Nothing leaves your machine.
 
-The installer picks the build for your computer, checks it against the release's checksums, puts it in `~/.local/bin` (no sudo), offers to add that folder to your `PATH`, and offers to run `jira setup`. Run it again any time: it updates in place.
+The installer picks the build for your computer, checks it against the release's checksums, puts it in `~/.local/bin` (no sudo), offers to add that folder to your `PATH`, to teach Claude Code this CLI if you use it, and to run `jira setup`. Run it again any time: it updates in place.
 
 `jira setup` walks you through four steps:
 
 <p align="center"><img src="assets/setup.gif" alt="jira setup, step by step" width="720"></p>
 
 1. **Your Jira site**: paste any link from Jira (a board, a ticket) or just the site name. If the link was a ticket, its project is noted too.
-2. **Sign in**: with an **API token** (recommended; works with Google and SSO accounts): setup opens the page where you create one and checks it as you paste it. If Jira rejects it, it says why (wrong email, a password instead of a token, an expired token). Companies that turned API tokens off can use the **browser login (OAuth)**, and setup guides the one-time app registration click by click.
+2. **Sign in**: with an **API token** (recommended; works with Google and SSO accounts). Your email comes filled in from git — the work one when you keep several — and setup opens the page where you create the token and says what to click. Click **Copy** and setup takes the token from your clipboard: no pasting. If Jira rejects it, it says why (wrong email, a password instead of a token, an expired token). Companies that turned API tokens off can use the **browser login (OAuth)**, and setup guides the one-time app registration click by click.
 3. **Default project**: where `jira ls` and `jira ui` start, and what short keys expand to (`306` → `OPS-306`).
-4. **Extras for `jira ui`** (optional): checks git, the GitHub CLI and Claude Code, and asks where your repositories live, to link branches and pull requests to their tickets.
+4. **Extras for `jira ui`** (optional): checks git, the GitHub CLI and Claude Code, asks where your repositories live to link branches and pull requests to their tickets, signs the GitHub CLI in if it isn't (`gh auth login`), and offers the `/jira` skill for Claude Code.
 
-Nothing is saved until the end. Settings stay in `~/.config/jira-cli/`, readable only by you. Run `jira setup` again whenever you want: it offers to check everything, switch project, or start over.
+Nothing is saved until the end. Settings stay in `~/.config/jira-cli/`, readable only by you, and setup clears the token from your clipboard once it's saved. Run `jira setup` again whenever you want: it offers to check everything, switch project, or start over.
 
 ## The terminal UI
 
-`jira ui` opens on your last tab. `jira ui 306` jumps straight into a ticket.
+`jira ui` opens on your last tab. `jira ui 306` jumps straight into a ticket. Anywhere a command takes a key, a short number (`306`) or a pasted Jira link works too.
 
 | | |
 |---|---|
@@ -113,7 +113,7 @@ It shows what's new, downloads the release for your machine, checks its checksum
 <details>
 <summary><strong>Other ways to install, and uninstalling</strong></summary>
 
-- **A specific version or folder**: `curl -fsSL …/install.sh | JIRA_VERSION=v1.2.0 JIRA_INSTALL_DIR=~/bin sh` (`JIRA_NO_SETUP=1` and `JIRA_NO_MODIFY_PATH=1` keep it from asking).
+- **A specific version or folder**: `curl -fsSL …/install.sh | JIRA_VERSION=v1.2.0 JIRA_INSTALL_DIR=~/bin sh` (`JIRA_NO_SETUP=1`, `JIRA_NO_SKILL=1` and `JIRA_NO_MODIFY_PATH=1` keep it from asking).
 - **With Go**: `go install github.com/ngavilan-dogfy/jira-cli/cmd/jira@latest`
 - **By hand**: download `jira-<os>-<arch>` from the [latest release](https://github.com/ngavilan-dogfy/jira-cli/releases/latest), check it against `checksums.txt`, make it executable and put it in your `PATH`. Windows: `jira-windows-amd64.exe`.
 - **From source**: `make install` builds and copies to `~/.local/bin`.
