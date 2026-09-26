@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. `jira doctor` often points at the cause; its output helps.
+        **Never paste keys, tokens, hostnames or customer data.**
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The command you ran and what it printed, trimmed to what matters.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `jira version`.
+      placeholder: jira version v1.1.0 (darwin/arm64)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, terminal, and API token or browser login.
+      placeholder: macOS 15, iTerm2, API token
+  - type: textarea
+    id: doctor
+    attributes:
+      label: jira doctor
+      description: Optional. Its output, with anything private removed.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I removed keys, tokens and private data from everything above.
+          required: true
