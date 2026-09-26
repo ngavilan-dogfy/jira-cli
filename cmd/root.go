@@ -57,8 +57,8 @@ Change things:
   printf '100\n101\n' | jira batch move "In Progress"
 
 Every command adapts to where its output goes: colors in a terminal, TSV
-when piped, --json on most commands. Keys can be short: "100" means
-PROJ-100 with the project from your profile ('jira config').
+when piped, --json on most commands. Keys can be short ("100" means
+PROJ-100 with the project from your profile) or a pasted Jira link.
 
 Keep it working:
   jira doctor                   Check the site, your session and tools, with fixes

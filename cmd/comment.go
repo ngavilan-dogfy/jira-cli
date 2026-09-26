@@ -16,7 +16,8 @@ var commentJSON bool
 var commentCmd = &cobra.Command{
 	Use:   "comment <issue-key> <message>",
 	Short: "Add a comment to an issue",
-	Long: `Add a plain-text comment to an issue.
+	Long: `Add a comment to an issue, written in markdown — headings, lists, bold,
+code and links become Jira's own formatting.
 
 The message can be passed as arguments or piped via stdin.
 When piped, only the issue key is required as an argument.
