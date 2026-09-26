@@ -1,6 +1,6 @@
 ---
 name: jira
-description: Work with Jira Cloud through the `jira` CLI. Find and summarize issues, epics and backlogs; create, edit, move, assign, comment on and link issues; turn a ticket into a branch; and see what changed. Use it when the user mentions Jira, a key like ABC-123, their tickets, the backlog, an epic or sprint, what to work on next, or wants a ticket created, updated or moved.
+description: Work with Jira Cloud through the `jira` CLI. Find and summarize issues, epics and backlogs; create, edit, move, assign, comment on and link issues; turn a ticket into a branch; and see what changed. Use it when the user mentions Jira, a key like ABC-123, their tickets, the backlog, an epic or sprint, what to work on next, wants a ticket created, updated or moved, or pastes a Jira link.
 argument-hint: "[question | issue key | JQL]"
 allowed-tools: Bash, Read
 ---
@@ -30,9 +30,11 @@ you'd be inferring.
    description, comments, links, sub-tasks, attachments, recent history and
    the transitions available now. Don't chain `show` + `history` +
    `transitions`.
-2. **Short keys work.** `100` means `PROJ-100` with the project from the
-   user's profile. `-p OTHER` (on `ls`) queries another project without
-   switching profiles.
+2. **Short keys and links work.** `100` means `PROJ-100` with the project
+   from the user's profile, and a pasted Jira link (`…/browse/PROJ-12`, a
+   board with `?selectedIssue=PROJ-12`) works wherever a key does:
+   `jira context "<link>"`. `-p OTHER` (on `ls`) queries another project
+   without switching profiles.
 3. **Read freely. Write what was asked; confirm what you'd infer.** "Move
    PROJ-12 to Done" → do it. "Clean up my board" → propose the moves as a
    list and wait for a yes. Never delete unless asked for that deletion.

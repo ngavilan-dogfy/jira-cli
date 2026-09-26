@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -227,8 +228,18 @@ func wantsJSON() bool {
 	return false
 }
 
+// reLinkedKey finds the issue a Jira link points at: /browse/KEY-12, or a
+// board or list with ?selectedIssue=KEY-12.
+var reLinkedKey = regexp.MustCompile(`(?i)(?:/browse/|[?&]selectedIssue=)([A-Z][A-Z0-9_]*-\d+)`)
+
+// normalizeKey accepts a key (PROJ-12), a number of the default project
+// (12 → PROJ-12) or a link to the issue.
 func normalizeKey(key string) string {
-	key = strings.ToUpper(strings.TrimSpace(key))
+	key = strings.TrimSpace(key)
+	if m := reLinkedKey.FindStringSubmatch(key); m != nil && (strings.Contains(key, "://") || strings.Contains(key, ".atlassian.net")) {
+		return strings.ToUpper(m[1])
+	}
+	key = strings.ToUpper(key)
 	if _, err := strconv.Atoi(key); err == nil {
 		if cfg != nil && cfg.Project != "" {
 			return cfg.Project + "-" + key
