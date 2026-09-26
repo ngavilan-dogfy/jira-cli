@@ -22,6 +22,7 @@ func init() {
 	if base == "" {
 		return
 	}
+	hostname = func() (string, error) { return "ana-laptop", nil }
 	siteProbeURL = func(siteRef) string { return base + "/rest/api/3/serverInfo" }
 	apiBaseFor = func(*config.Profile) string { return base }
 	openURL = func(u string) {

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -401,7 +402,7 @@ func (w *wizard) signInToken() error {
 		email = w.existing.Email
 	}
 	if email == "" {
-		email = gitEmail()
+		email = emailFor(w.site.domain)
 	}
 	validEmail := func(s string) error {
 		if !strings.Contains(strings.TrimSpace(s), "@") {
@@ -413,50 +414,54 @@ func (w *wizard) signInToken() error {
 		return huh.NewInput().Title("Your Atlassian email").
 			Description("The one you sign in to Jira with.").Value(&email).Validate(validEmail)
 	}
-	open := true
-	err := ask(
-		emailField(),
-		huh.NewNote().
-			Title("Now create an API token").
-			Description("1. Your browser opens id.atlassian.com → Security → API tokens\n"+
-				"2. Click \"Create API token\", name it jira-cli, pick an expiry date, press Create\n"+
-				"3. Press Copy, come back here and paste it on the next screen"),
-		huh.NewConfirm().
-			Title("Open that page now?").
-			Affirmative("Yes, open it").Negative("I already have a token").
-			Value(&open),
+	if err := ask(emailField()); err != nil {
+		return err
+	}
+	sayOK("Atlassian account " + wzBold.Render(strings.TrimSpace(email)))
+	fmt.Println()
+	fmt.Println("  " + wzBold.Render("Now create an API token:"))
+	printSteps(
+		"Your browser opens "+wzBold.Render("id.atlassian.com → Security → API tokens"),
+		"Click "+wzBold.Render("Create API token")+" and call it "+wzBold.Render(tokenName()),
+		"Pick an expiry date and press "+wzBold.Render("Create"),
+		"Click "+wzBold.Render("Copy")+": setup takes the token from your clipboard",
 	)
-	if err != nil {
+	fmt.Println()
+	open := true
+	if err := ask(huh.NewConfirm().
+		Title("Open that page now?").
+		Affirmative("Yes, open it").Negative("I already have a token").
+		Value(&open)); err != nil {
 		return err
 	}
 	if open {
 		openURL(apiTokensPage)
 		sayInfo("Opened " + apiTokensPage)
 	}
+	fmt.Println()
+	tried := map[string]bool{}
+	token := ""
 	for {
 		email = strings.TrimSpace(email)
-		token := ""
-		err := ask(huh.NewInput().
-			Title("Paste your API token").
-			Description("Hidden while you type. It's saved only on this machine.").
-			EchoMode(huh.EchoModePassword).
-			Value(&token).
-			Validate(func(s string) error {
-				if strings.TrimSpace(s) == "" {
-					return fmt.Errorf("paste the token you copied")
-				}
-				return nil
-			}))
-		if err != nil {
-			return err
+		if token == "" {
+			if len(tried) > 0 {
+				fmt.Println()
+			}
+			t, err := readKey(keyPrompt{Title: "Your API token", Label: "API token",
+				Hint:  "Hidden while you type, saved only on this machine.",
+				Clean: cleanToken, Match: reAtlassianToken.MatchString, Skip: tried})
+			if err != nil {
+				return err
+			}
+			token = t
+			tried[token] = true
 		}
-		token = strings.Join(strings.Fields(token), "") // pasted line breaks
 		p := &config.Profile{Name: w.profile, AuthMethod: "token", Domain: w.site.domain, SiteURL: w.site.url,
 			Email: email, Token: token, MaxResults: 20}
 		w.carry(p)
 		c := jira.NewBasicClient(apiBaseFor(p), email, token)
 		var me *jira.Myself
-		err = withSpinner("Checking your token", func() error { var e error; me, e = c.GetMyself(); return e })
+		err := withSpinner("Checking your token", func() error { var e error; me, e = c.GetMyself(); return e })
 		if err == nil {
 			sayOK("Signed in as " + wzBold.Render(me.DisplayName) + wzMuted.Render(" ("+email+")"))
 			w.p, w.client, w.me = p, c, me
@@ -466,8 +471,8 @@ func (w *wizard) signInToken() error {
 		sayFail(msg, fix)
 		next := "retry"
 		if err := ask(huh.NewSelect[string]().Title("What now?").Options(
-			huh.NewOption("Paste the token again", "retry"),
-			huh.NewOption("Fix the email", "email"),
+			huh.NewOption("Try another token", "retry"),
+			huh.NewOption("Fix the email (and try this token again)", "email"),
 			huh.NewOption("Open the API tokens page again", "page"),
 			huh.NewOption("Sign in with the browser (OAuth) instead", "oauth"),
 		).Value(&next)); err != nil {
@@ -478,11 +483,13 @@ func (w *wizard) signInToken() error {
 			if err := ask(emailField()); err != nil {
 				return err
 			}
+			continue // same token, new email
 		case "page":
 			openURL(apiTokensPage)
 		case "oauth":
 			return errSwitchMethod
 		}
+		token = ""
 	}
 }
 
@@ -733,7 +740,32 @@ func (w *wizard) save() error {
 	}
 	w.client = buildClient(w.p) // saves refreshed OAuth tokens from now on
 	sayOK("Saved to " + tildePath(config.ProfileDir()+"/"+w.profile+".yaml") + wzMuted.Render(" (only readable by you)"))
+	clearTakenKeys()
 	return nil
+}
+
+// hostname is os.Hostname; the e2e build fixes it for recordings.
+var hostname = os.Hostname
+
+// reAtlassianToken is what an Atlassian API token looks like: ATATT…,
+// about 190 characters.
+var reAtlassianToken = regexp.MustCompile(`^ATATT[A-Za-z0-9_\-=]{40,}$`)
+
+// cleanToken drops the spaces and line breaks a paste can bring.
+func cleanToken(s string) string { return strings.Join(strings.Fields(s), "") }
+
+// tokenName is what to call the token at Atlassian, so it's clear later
+// where it's used.
+func tokenName() string {
+	host, _ := hostname()
+	host = strings.TrimSuffix(strings.TrimSuffix(host, ".local"), ".lan")
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		host = host[:i]
+	}
+	if host == "" {
+		return "jira-cli"
+	}
+	return "jira-cli · " + strings.ToLower(host)
 }
 
 // ─── step 4: extras ──────────────────────────────────────────────
@@ -929,12 +961,57 @@ func tildePath(p string) string {
 	return p
 }
 
-func gitEmail() string {
-	out, err := exec.Command("git", "config", "--global", "user.email").Output()
-	if err != nil {
-		return ""
+// emailFor guesses the Atlassian email for a site: among the emails git
+// knows, the one whose domain looks like the site's name
+// (acme.atlassian.net → ana@acme.com), else git's global one.
+func emailFor(siteDomain string) string {
+	emails := gitEmails()
+	name := strings.ToLower(strings.SplitN(siteDomain, ".", 2)[0])
+	for _, e := range emails {
+		if at := strings.LastIndex(e, "@"); at > 0 && len(name) >= 3 && strings.Contains(strings.ToLower(e[at+1:]), name) {
+			return e
+		}
 	}
-	return strings.TrimSpace(string(out))
+	if len(emails) > 0 {
+		return emails[0]
+	}
+	return ""
+}
+
+// gitEmails are the emails git knows: the global one, and those of the
+// configs it includes for some folders (a work identity next to a personal
+// one). Swappable in tests.
+var gitEmails = func() []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(e string) {
+		if e = strings.TrimSpace(e); e != "" && !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
+	}
+	if b, err := exec.Command("git", "config", "--global", "user.email").Output(); err == nil {
+		add(string(b))
+	}
+	b, err := exec.Command("git", "config", "--global", "--get-regexp", `^includeif\..*\.path$`).Output()
+	if err != nil {
+		return out
+	}
+	home, _ := os.UserHomeDir()
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		path := f[len(f)-1]
+		if strings.HasPrefix(path, "~/") {
+			path = filepath.Join(home, path[2:])
+		}
+		if eb, err := exec.Command("git", "config", "--file", path, "user.email").Output(); err == nil {
+			add(string(eb))
+		}
+	}
+	return out
 }
 
 // openURL opens a page in the default browser; swappable in tests.
