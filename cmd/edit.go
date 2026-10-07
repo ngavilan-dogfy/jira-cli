@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ngavilan-dogfy/jira-cli/jira"
 	"github.com/ngavilan-dogfy/jira-cli/ui"
 
 	"github.com/spf13/cobra"
@@ -74,7 +73,11 @@ Examples:
 			fields["issuetype"] = map[string]string{"name": editType}
 		}
 		if editDescription != "" {
-			fields["description"] = jira.MarkdownToADF(editDescription)
+			adf, err := client.MarkdownToADF(editDescription)
+			if err != nil {
+				return err
+			}
+			fields["description"] = adf
 		}
 		if editDue != "" {
 			fields["duedate"] = editDue

@@ -537,7 +537,14 @@ var inlineRe = regexp.MustCompile(
 		`|\*\*(?:[^*]|\*(?:[^*]))+?\*\*` + // bold **...** (non-greedy, allow lone *)
 		`|~~[^~]+~~` + // strikethrough
 		`|\*[^\s*][^*]*?\*` + // italic *...* (must not start with space)
-		`|\[[^\]]+\]\([^)]+\)`, // link [text](url)
+		`|@\[[^\]]+\]\([^)\s]+\)` + // mention @[Name](accountId)
+		`|\[[^\]]+\]\([^)]+\)` + // link [text](url)
+		`|https?://[^\s<>]+`, // bare URL
+)
+
+var (
+	linkTokenRe    = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
+	mentionTokenRe = regexp.MustCompile(`^@\[([^\]]+)\]\(([^)\s]+)\)$`)
 )
 
 func parseInline(text string) []map[string]interface{} {
@@ -589,9 +596,34 @@ func parseInlineToken(tok string, inherited []map[string]interface{}) []map[stri
 		return parseInlineWithMarks(tok[2:len(tok)-2], appendMark(inherited, "strike"))
 	case strings.HasPrefix(tok, "*") && strings.HasSuffix(tok, "*"):
 		return parseInlineWithMarks(tok[1:len(tok)-1], appendMark(inherited, "em"))
+	case strings.HasPrefix(tok, "@["):
+		// A mention is its own node and carries no marks. Names are resolved
+		// to account ids before conversion (Client.ResolveMentions); an
+		// unresolved `@[Name]` never matches and stays plain text.
+		if mm := mentionTokenRe.FindStringSubmatch(tok); mm != nil {
+			return []map[string]interface{}{{
+				"type": "mention",
+				"attrs": map[string]interface{}{
+					"id":   strings.TrimPrefix(mm[2], "accountid:"),
+					"text": "@" + mm[1],
+				},
+			}}
+		}
+	case strings.HasPrefix(tok, "http://"), strings.HasPrefix(tok, "https://"):
+		// Inside [text](url) the text is already a link: don't nest another.
+		if hasMark(inherited, "link") {
+			break
+		}
+		url, rest := splitURLTail(tok)
+		nodes := []map[string]interface{}{
+			textNode(url, append(append([]map[string]interface{}{}, inherited...), linkMarkFor(url))),
+		}
+		if rest != "" {
+			nodes = append(nodes, textNode(rest, inherited))
+		}
+		return nodes
 	case strings.HasPrefix(tok, "["):
-		linkRe := regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
-		lm := linkRe.FindStringSubmatch(tok)
+		lm := linkTokenRe.FindStringSubmatch(tok)
 		if lm != nil {
 			linkMark := map[string]interface{}{
 				"type":  "link",
@@ -604,6 +636,43 @@ func parseInlineToken(tok string, inherited []map[string]interface{}) []map[stri
 	}
 	// Fallback: emit as plain text with inherited marks.
 	return []map[string]interface{}{textNode(tok, inherited)}
+}
+
+func linkMarkFor(href string) map[string]interface{} {
+	return map[string]interface{}{
+		"type":  "link",
+		"attrs": map[string]interface{}{"href": href},
+	}
+}
+
+func hasMark(marks []map[string]interface{}, markType string) bool {
+	for _, m := range marks {
+		if m["type"] == markType {
+			return true
+		}
+	}
+	return false
+}
+
+// splitURLTail separates a bare URL from the punctuation that follows it in
+// a sentence: "see https://x.io/a." links https://x.io/a and keeps the dot
+// as text. A closing parenthesis stays in the URL only when the URL opened
+// it (https://en.wikipedia.org/wiki/Go_(game)).
+func splitURLTail(tok string) (url, rest string) {
+	end := len(tok)
+	for end > 0 {
+		c := tok[end-1]
+		if strings.ContainsRune(".,;:!?\"'", rune(c)) {
+			end--
+			continue
+		}
+		if c == ')' && strings.Count(tok[:end], ")") > strings.Count(tok[:end], "(") {
+			end--
+			continue
+		}
+		break
+	}
+	return tok[:end], tok[end:]
 }
 
 func textNode(text string, marks []map[string]interface{}) map[string]interface{} {

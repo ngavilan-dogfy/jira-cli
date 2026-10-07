@@ -266,7 +266,11 @@ func cmdSaveDescription(c *appCtx, key string, original []byte, text string) tea
 			_ = writeClipboard(text)
 			return mutationDoneMsg{key: key, err: fmt.Errorf("%s's description changed in Jira while you were editing, so it wasn't saved — your text is in the clipboard", key)}
 		}
-		if err := client.EditIssue(key, map[string]any{"description": jira.MarkdownToADF(text)}); err != nil {
+		adf, err := client.MarkdownToADF(text)
+		if err != nil {
+			return mutationDoneMsg{key: key, err: err}
+		}
+		if err := client.EditIssue(key, map[string]any{"description": adf}); err != nil {
 			return mutationDoneMsg{key: key, err: err}
 		}
 		return mutationDoneMsg{key: key, ok: "Description of " + key + " updated"}

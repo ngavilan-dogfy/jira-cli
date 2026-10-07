@@ -329,11 +329,11 @@ func (c *Client) GetComments(key string, max int) (*CommentsResult, error) {
 }
 
 func (c *Client) AddComment(key, body string) error {
-	comment := map[string]interface{}{
-		"body": MarkdownToADF(body),
+	adf, err := c.MarkdownToADF(body)
+	if err != nil {
+		return err
 	}
-
-	_, err := c.do("POST", "/rest/api/3/issue/"+key+"/comment", comment)
+	_, err = c.do("POST", "/rest/api/3/issue/"+key+"/comment", map[string]interface{}{"body": adf})
 	return err
 }
 
@@ -403,7 +403,11 @@ func (c *Client) CreateIssue(projectKey, issueType, summary, parentKey, descript
 		fields["parent"] = map[string]string{"key": parentKey}
 	}
 	if description != "" {
-		fields["description"] = MarkdownToADF(description)
+		adf, err := c.MarkdownToADF(description)
+		if err != nil {
+			return nil, err
+		}
+		fields["description"] = adf
 	}
 	if dueDate != "" {
 		fields["duedate"] = dueDate

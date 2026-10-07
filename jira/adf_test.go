@@ -955,3 +955,80 @@ func TestMarkdownToADF_LinkWithInlineCode(t *testing.T) {
 	}
 	t.Fatalf("expected 'api' text node, got: %s", toJSON(inlines))
 }
+
+func TestMarkdownToADF_MentionsAndBareURLs(t *testing.T) {
+	inline := func(md string) []interface{} {
+		t.Helper()
+		raw, _ := json.Marshal(MarkdownToADF(md))
+		var doc map[string]interface{}
+		json.Unmarshal(raw, &doc)
+		para := doc["content"].([]interface{})[0].(map[string]interface{})
+		return para["content"].([]interface{})
+	}
+	href := func(n interface{}) string {
+		for _, m := range n.(map[string]interface{})["marks"].([]interface{}) {
+			mark := m.(map[string]interface{})
+			if mark["type"] == "link" {
+				return mark["attrs"].(map[string]interface{})["href"].(string)
+			}
+		}
+		return ""
+	}
+
+	t.Run("mention with an account id becomes a mention node", func(t *testing.T) {
+		nodes := inline("Thanks @[Ada Lovelace](5b10a2844c20165700ede21g), merged.")
+		if len(nodes) != 3 {
+			t.Fatalf("want text, mention, text; got %s", toJSON(nodes))
+		}
+		m := nodes[1].(map[string]interface{})
+		attrs := m["attrs"].(map[string]interface{})
+		if m["type"] != "mention" || attrs["id"] != "5b10a2844c20165700ede21g" || attrs["text"] != "@Ada Lovelace" {
+			t.Fatalf("bad mention: %s", toJSON(m))
+		}
+		if _, hasMarks := m["marks"]; hasMarks {
+			t.Fatalf("a mention carries no marks: %s", toJSON(m))
+		}
+	})
+
+	t.Run("mention without an id stays text", func(t *testing.T) {
+		nodes := inline("Ask @[Ada Lovelace] about it")
+		if len(nodes) != 1 || nodes[0].(map[string]interface{})["type"] != "text" {
+			t.Fatalf("want one text node, got %s", toJSON(nodes))
+		}
+	})
+
+	t.Run("bare URL is linked, sentence punctuation is not", func(t *testing.T) {
+		nodes := inline("See https://example.com/pull/12 (PROJ-7), or https://example.com/docs.")
+		if got := href(nodes[1]); got != "https://example.com/pull/12" {
+			t.Fatalf("first link href = %q in %s", got, toJSON(nodes))
+		}
+		last := nodes[len(nodes)-1].(map[string]interface{})
+		link := nodes[len(nodes)-2]
+		if href(link) != "https://example.com/docs" || last["text"] != "." {
+			t.Fatalf("trailing dot must stay outside the link: %s", toJSON(nodes))
+		}
+	})
+
+	t.Run("balanced parenthesis stays in the URL", func(t *testing.T) {
+		nodes := inline("(see https://en.wikipedia.org/wiki/Go_(game))")
+		if got := href(nodes[1]); got != "https://en.wikipedia.org/wiki/Go_(game)" {
+			t.Fatalf("href = %q", got)
+		}
+	})
+
+	t.Run("URL as link text is not linked twice", func(t *testing.T) {
+		nodes := inline("[https://example.com](https://example.com)")
+		if len(nodes) != 1 || len(nodes[0].(map[string]interface{})["marks"].([]interface{})) != 1 {
+			t.Fatalf("want one node with one link mark, got %s", toJSON(nodes))
+		}
+	})
+
+	t.Run("URL inside code is left alone", func(t *testing.T) {
+		nodes := inline("run `curl https://example.com`")
+		code := nodes[1].(map[string]interface{})
+		marks := code["marks"].([]interface{})
+		if len(marks) != 1 || marks[0].(map[string]interface{})["type"] != "code" {
+			t.Fatalf("want only a code mark, got %s", toJSON(code))
+		}
+	})
+}

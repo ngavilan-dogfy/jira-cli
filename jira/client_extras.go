@@ -95,10 +95,11 @@ func (c *Client) AddAttachment(key string, paths []string) ([]Attachment, error)
 
 // EditComment replaces the body of an existing comment.
 func (c *Client) EditComment(key, commentID, body string) error {
-	payload := map[string]interface{}{
-		"body": MarkdownToADF(body),
+	adf, err := c.MarkdownToADF(body)
+	if err != nil {
+		return err
 	}
-	_, err := c.do("PUT", "/rest/api/3/issue/"+key+"/comment/"+commentID, payload)
+	_, err = c.do("PUT", "/rest/api/3/issue/"+key+"/comment/"+commentID, map[string]interface{}{"body": adf})
 	return err
 }
 
