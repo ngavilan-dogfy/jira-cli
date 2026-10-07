@@ -77,7 +77,7 @@ The UI paints with your terminal's own colors, remembers your tab, layout and fo
 - **`jira context KEY`** is built for agents: fields, description, every comment in order, links, sub-tasks, attachments, history, available transitions, epic children, watchers and development info — one call, as markdown ready for a prompt, or `--json`. `--fast` skips the enrichment calls.
 - **Keys are forgiving.** `100` means `PROJ-100` in your default project, and a pasted Jira link works wherever a key does: `jira context "https://acme.atlassian.net/browse/OPS-7"`.
 - **`jira export --jql '…' --format md`** turns a whole epic or backlog into one document; `--comments` includes the discussion.
-- **Writing is markdown.** Descriptions and comments are written in markdown and converted to Jira's document format, and read back the same way.
+- **Writing is markdown.** Descriptions and comments are written in markdown and converted to Jira's document format, and read back the same way. `@[Full Name]` mentions a person (they are notified), and a bare URL becomes a link.
 - **`jira batch <action>`** applies a move, an assignment, labels or a comment to every key on stdin; **`jira wait KEY --status Done`** blocks until a status is reached.
 
 ### Claude Code

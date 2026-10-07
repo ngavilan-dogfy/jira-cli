@@ -41,7 +41,11 @@ you'd be inferring.
 4. **Markdown, never Jira wiki markup.** Descriptions and comments take
    `## headings`, `- lists`, `**bold**`, `` `code` ``, fenced code and
    `[links](url)`; the CLI converts them. Don't write `h2.`, `{code}` or
-   `[text|url]`.
+   `[text|url]`. Give links a readable text (`[PR #12](url)`,
+   `[PROJ-7](…/browse/PROJ-7)`) rather than pasting the URL, and mention
+   people with `@[Full Name]` so they are notified: the name must match one
+   person, or nothing is posted and the candidates are listed
+   (`@[Name](accountId)` picks one).
 5. **Workflows are strict.** A ticket can only move to the statuses in
    `availableTransitions` (from `context`, or `jira transitions KEY --json`).
    If the target isn't there, step through the intermediate status.
@@ -130,6 +134,7 @@ jira edit PROJ-123 --summary "…" --priority High --labels "a,b"
 jira edit PROJ-123 --description "## Context\n…"  # replaces the description
 jira edit PROJ-123 --due 2026-10-15
 jira comment PROJ-123 "Deployed to staging, ready for QA."
+jira comment PROJ-123 --dry-run < note.md         # check mentions and links; posts nothing
 jira label-add PROJ-123 needs-review              # keeps the other labels
 jira link PROJ-123 PROJ-456 --type Blocks
 jira watch PROJ-123                               # or unwatch
